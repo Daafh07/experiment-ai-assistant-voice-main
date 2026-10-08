@@ -158,6 +158,31 @@ Een eventuele Vercel Authentication-beveiliging voor de hele deployment
 moet bezoekers toegang tot het formulier toestaan; de eigen app-login
 beschermt de demo en de presentatorroutes.
 
+## Supabase-koppeling controleren
+
+Bij een fout toont de ingelogde presentator nu een specifieke melding. In
+Vercel Logs staat daarnaast `Supabase RPC ...: HTTP ..., code ...`, zonder
+keys of vraaginhoud. Deploy gewijzigde code en environment variables eerst
+opnieuw voordat je de melding controleert.
+
+Controleer in de SQL Editor van hetzelfde project als `SUPABASE_URL`:
+
+```sql
+select
+  to_regprocedure('public.ayla_audience_state(text)') as wachtrij,
+  to_regprocedure('public.ayla_audience_submit(text,text,text,text,text)') as insturen,
+  to_regprocedure('public.ayla_audience_take(text,bigint)') as behandelen;
+notify pgrst, 'reload schema';
+```
+
+Een `NULL` betekent dat die functie ontbreekt: voer het eerste migratiescript
+volledig uit. De `NOTIFY` vernieuwt de API-schema-cache. Bij HTTP 401
+controleer je de geheime serverkey en of key en URL uit hetzelfde project
+komen. Bij HTTP 403/`42501` controleer je de rechten uit het migratiescript.
+Gebruik de project-URL (`https://...supabase.co`), geen Dashboard-URL. De
+Data API moet ingeschakeld zijn met `public` als exposed schema; het private
+schema `ayla_private` hoeft niet te worden exposed.
+
 ## Publieksvragen via QR-code of URL
 
 Druk op **Q** om de QR-code te tonen. Wie niet kan scannen, kan de URL

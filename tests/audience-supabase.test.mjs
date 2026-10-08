@@ -20,6 +20,7 @@ function load(path, context) {
 test('Supabase queue uses the real PostgreSQL migration and server-only RPCs', async (t) => {
   const db = new PGlite()
   const secret = 'sb_secret_integration_test'
+  let failure = null
   const functions = {
     ayla_audience_submit: ['p_session', 'p_client', 'p_ip', 'p_text', 'p_name'],
     ayla_audience_state: ['p_session'],
@@ -35,6 +36,11 @@ test('Supabase queue uses the real PostgreSQL migration and server-only RPCs', a
     })
   }
   const rest = createServer(async (req, res) => {
+    if (failure) {
+      res.writeHead(failure.status, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ code: failure.code, message: secret }))
+      return
+    }
     if (req.headers.apikey !== secret || req.headers.authorization) {
       res.writeHead(401); res.end('Invalid server key'); return
     }
@@ -132,6 +138,31 @@ test('Supabase queue uses the real PostgreSQL migration and server-only RPCs', a
       const configured = instance({ ...config, audienceRedisUrl: 'https://unused.example', audienceRedisToken: 'unused' })
       assert.equal(configured.audienceBackend({}), 'supabase')
       assert.equal((await configured.audienceState({})).count, 0)
+    })
+    await t.test('presenter gets actionable status codes without leaking provider bodies or keys', async () => {
+      try {
+        for (const [status, code, expected] of [
+          [401, '', /serverkey/],
+          [403, '42501', /geen toegang/],
+          [404, 'PGRST202', /wachtrij ontbreekt/],
+          [404, '', /Data API/],
+          [503, 'PGRST002', /HTTP 503, PGRST002/]
+        ]) {
+          failure = { status, code }
+          await assert.rejects(first.audienceState({ context: { demoAuthenticated: true } }), error => {
+            assert.match(error.statusMessage, expected)
+            assert.equal(error.data.supabaseStatus, status)
+            assert.equal(error.data.supabaseCode, code || null)
+            assert.equal(error.statusMessage.includes(secret), false)
+            return true
+          })
+          await assert.rejects(first.audienceState({}), error => {
+            assert.equal(error.statusMessage, 'Publieksvragen zijn even niet bereikbaar. Controleer de Supabase-koppeling.')
+            assert.equal(error.data, undefined)
+            return true
+          })
+        }
+      } finally { failure = null }
     })
     if (process.env.TEST_VERCEL_ARTIFACT) {
       await t.test('Vercel artifact routes visitor submission to Supabase and protects presenter', async () => {

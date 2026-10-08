@@ -131,3 +131,6 @@ grant execute on function public.ayla_audience_state(text) to service_role;
 grant execute on function public.ayla_audience_take(text, bigint) to service_role;
 
 commit;
+
+-- Make newly created RPC functions visible to the Supabase Data API.
+notify pgrst, 'reload schema';

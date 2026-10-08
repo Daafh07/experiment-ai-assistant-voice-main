@@ -58,18 +58,38 @@ function storage(event: H3Event) {
 
 async function supabaseRpc<T>(event: H3Event, name: string, args: Record<string, string | number>): Promise<T> {
   const config = useRuntimeConfig(event)
-  const key = config.supabaseSecretKey
+  const key = config.supabaseSecretKey.trim()
   const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' }
   // Modern secret keys belong in apikey, not in a JWT Authorization header.
   if (!key.startsWith('sb_secret_')) headers.Authorization = `Bearer ${key}`
+  let status = 0
+  let code = ''
   try {
-    const response = await fetch(`${config.supabaseUrl.replace(/\/$/, '')}/rest/v1/rpc/${name}`, {
+    const response = await fetch(`${config.supabaseUrl.trim().replace(/\/+$/, '')}/rest/v1/rpc/${name}`, {
       method: 'POST', headers, body: JSON.stringify(args), signal: AbortSignal.timeout(5000)
     })
-    if (!response.ok) throw new Error('Supabase request failed')
+    status = response.status
+    if (!response.ok) {
+      const error = await response.json().catch(() => null) as { code?: unknown } | null
+      if (typeof error?.code === 'string' && /^(PGRST\d{3}|[A-Z0-9]{5})$/.test(error.code)) code = error.code
+      throw new Error('Supabase request failed')
+    }
     return await response.json() as T
   } catch {
-    throw createError({ statusCode: 503, statusMessage: 'Publieksvragen zijn even niet bereikbaar. Controleer de Supabase-koppeling.' })
+    // Log only safe codes, never provider messages, credentials or questions.
+    console.warn(`[ayla] Supabase RPC ${name}: HTTP ${status || 'network'}, code ${code || 'unknown'}`)
+    const presenter = event.context?.demoAuthenticated === true
+    let message = 'Publieksvragen zijn even niet bereikbaar. Controleer de Supabase-koppeling.'
+    if (presenter) {
+      if (status === 401) message = 'Supabase weigert de serverkey. Gebruik SUPABASE_SECRET_KEY uit hetzelfde project als SUPABASE_URL en deploy opnieuw.'
+      else if (status === 403 || code === '42501') message = 'Supabase geeft geen toegang tot de wachtrij. Gebruik een geheime serverkey en voer het wachtrij-SQL-script inclusief rechten uit.'
+      else if (code === 'PGRST202' || code === '42P01') message = 'De Supabase-wachtrij ontbreekt of is nog niet zichtbaar voor de API. Voer het wachtrij-SQL-script uit en vernieuw de schema-cache.'
+      else if (status === 404 || code === 'PGRST106') message = 'De Supabase Data API is niet bereikbaar op deze project-URL. Controleer SUPABASE_URL en of de Data API met schema public is ingeschakeld.'
+      else if (!status) message = 'De Supabase-server is niet bereikbaar of reageert te langzaam. Controleer de project-URL en of het project actief is.'
+      else message = `Supabase geeft een fout (HTTP ${status}${code ? `, ${code}` : ''}). Bekijk de Vercel-serverlogs.`
+    }
+    throw createError({ statusCode: 503, statusMessage: message,
+      ...(presenter ? { data: { supabaseStatus: status || null, supabaseCode: code || null } } : {}) })
   }
 }
 
