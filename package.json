@@ -21,6 +21,7 @@
     "vue-router": "^5.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^26.6.4",
     "typescript": "~5.9.3",
     "vue-tsc": "^3.3.12"

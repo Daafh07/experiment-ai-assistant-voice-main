@@ -94,7 +94,8 @@ de lokale ontwikkelserver mag zonder ingesteld wachtwoord draaien.
 
 De browser onthoudt de login doorgaans tijdens de browsersessie. Gebruik
 een privévenster voor de demo en sluit dat na afloop om de login te wissen.
-Op Vercel gebruikt de publiekswachtrij gedeelde Redis-opslag.
+Op Vercel gebruikt de publiekswachtrij gedeelde Supabase-opslag (of Redis
+als alternatief).
 
 ## Privédemo deployen op Vercel
 
@@ -113,16 +114,35 @@ voor zowel Production als Preview als je beide gebruikt:
 | --- | --- |
 | `OPENROUTER_API_KEY` | Je OpenRouter API-key uit je lokale `.env` |
 | `DEMO_PASSWORD` | Je sterke demowachtwoord uit je lokale `.env` |
-| `UPSTASH_REDIS_REST_URL` | REST URL van je gekoppelde Upstash Redis-database |
-| `UPSTASH_REDIS_REST_TOKEN` | REST token met lees- en schrijfrechten voor die database |
+| `SUPABASE_URL` | Project-URL, bijvoorbeeld `https://jouw-project.supabase.co` |
+| `SUPABASE_SECRET_KEY` | Een geheime serverkey (`sb_secret_...`) uit je Supabase-project |
 | `AUDIENCE_SESSION` | Een sessienaam, bijvoorbeeld `npuls-demo-1` (standaard: `demo`) |
 
-Maak in Vercel onder **Storage / Marketplace** een Upstash Redis-database
-aan en koppel die aan het project. De integration kan ook variabelen met de
-namen `KV_REST_API_URL` en `KV_REST_API_TOKEN` instellen; die worden eveneens
-ondersteund. Redis-gegevens blijven uitsluitend op de server. De
-publieksfunctie weigert op Vercel toegang als Redis ontbreekt, zodat vragen
-niet ongemerkt in tijdelijke servergeheugens verdwijnen.
+Open in je bestaande Supabase-project de **SQL Editor** en voer deze
+bestanden in volgorde uit:
+
+1. `supabase/migrations/202610080001_audience.sql`: tabellen en serverfuncties.
+2. `supabase/migrations/202610080002_audience_cleanup.sql`: automatische opruiming via Supabase Cron.
+
+De scripts maken alleen Ayla-tabellen en -functies aan, zonder bestaande
+projecttabellen te wijzigen. De gegevens staan in het afgeschermde schema
+`ayla_private`, met RLS ingeschakeld en zonder toegang voor gewone gebruikers.
+Alleen de server mag de drie RPC-functies uitvoeren. Laat `ayla_private`
+buiten de exposed schemas van de Data API; de RPC-functies staan in `public`.
+
+Kopieer je project-URL en een secret key uit Supabase naar de environment
+variables in Vercel. De key blijft uitsluitend op de server; gebruik geen
+`NUXT_PUBLIC_`-variabele. Een bestaande `SUPABASE_SERVICE_ROLE_KEY` wordt ook
+ondersteund, maar een moderne `SUPABASE_SECRET_KEY` heeft de voorkeur. Gebruik
+hier geen publishable/anon key: die mag de wachtrij niet lezen of wijzigen.
+Deploy vervolgens opnieuw. Controleer onder Supabase Cron dat de job
+`ayla-audience-cleanup` actief is en succesvol draait.
+
+Supabase heeft voorrang als beide opslagdiensten zijn ingesteld. Redis blijft
+als alternatief ondersteund met `UPSTASH_REDIS_REST_URL` en
+`UPSTASH_REDIS_REST_TOKEN` (of `KV_REST_API_URL` en `KV_REST_API_TOKEN`).
+De publieksfunctie weigert op Vercel toegang als gedeelde opslag ontbreekt,
+zodat vragen niet ongemerkt in tijdelijke servergeheugens verdwijnen.
 
 Upload of commit `.env` niet. Bij ontbrekend `DEMO_PASSWORD` blijft de
 productiesite gesloten. Log na het deployen in met gebruikersnaam `ayla`.
@@ -147,8 +167,11 @@ in de URL.
 
 Op Vercel gebruikt de QR-code automatisch het domein van de geopende site.
 Met `PUBLIC_URL` kun je een eigen korte domeinnaam instellen. Openstaande
-vragen worden uiterlijk vier uur na de laatste inzending verwijderd; een
-behandelde of overgeslagen vraag wordt direct uit de wachtrij verwijderd.
+vragen verlopen vier uur na de laatste inzending; Supabase Cron verwijdert
+ze vervolgens bij de eerstvolgende opruimronde (elke minuut). Een behandelde
+of overgeslagen vraag wordt direct uit de wachtrij verwijderd. De globale
+vraagnummer-sequence bevat geen vraagtekst en blijft behouden, zodat oude
+vraag-ID's niet kunnen worden hergebruikt.
 De sessiecode blijft gelijk bij een herstart of een nieuwe productiebuild.
 Verander `AUDIENCE_SESSION` en deploy opnieuw om met een lege wachtrij te
 beginnen. Oude sessies verlopen vanzelf. Preview-deployments hebben een
@@ -159,12 +182,16 @@ wachtrij bevat maximaal vijftig vragen; een aanvullend maximum van zestig
 inzendingen per minuut per IP-adres beperkt misbruik. Alleen insturen
 verbruikt geen AI-tegoed: Ayla antwoordt pas als de presentator **V** drukt.
 
-Lokaal zonder Redis gebruikt het adres het IP-adres van de laptop; telefoons
+Lokaal zonder Supabase of Redis gebruikt het adres het IP-adres van de laptop; telefoons
 moeten dan op hetzelfde wifi-netwerk zitten. Voor een herkenbare korte URL
 stel je `PUBLIC_URL` in `.env` in op een eigen domein of tunnel die naar
 deze app verwijst. Alleen deze instelling maakt een domein nog niet
 bereikbaar: het domein of de tunnel moet ook daadwerkelijk zijn ingericht.
-Lokaal zonder Redis vervallen QR-links met een oude sessiecode na een herstart.
+Lokaal zonder gedeelde opslag vervallen QR-links met een oude sessiecode na een herstart.
+
+`npm test` controleert de Supabase-migratie met een lokale, tijdelijke
+PostgreSQL-database via PGlite. Dit test ook rollen en rechten, wachtrijlimieten
+en verloop/opruiming; hiervoor zijn geen Supabase-accountgegevens nodig.
 
 De Redis-integratietests kunnen zonder cloudaccount worden uitgevoerd met
 `REDIS_SERVER_BIN=/pad/naar/redis-server npm test`; `redis-cli` moet ernaast

@@ -52,21 +52,44 @@ async function redisEval(event: H3Event, script: string, keys: string[], args: s
 }
 
 function storage(event: H3Event) {
-  const token = audienceToken(event) // also fails closed if hosted Redis is missing
-  return { shared: Boolean(useRuntimeConfig(event).audienceRedisUrl), prefix: `ayla:audience:{${token}}` }
+  const token = audienceToken(event)
+  return { backend: audienceBackend(event), token, prefix: `ayla:audience:{${token}}` }
+}
+
+async function supabaseRpc<T>(event: H3Event, name: string, args: Record<string, string | number>): Promise<T> {
+  const config = useRuntimeConfig(event)
+  const key = config.supabaseSecretKey
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' }
+  // Modern secret keys belong in apikey, not in a JWT Authorization header.
+  if (!key.startsWith('sb_secret_')) headers.Authorization = `Bearer ${key}`
+  try {
+    const response = await fetch(`${config.supabaseUrl.replace(/\/$/, '')}/rest/v1/rpc/${name}`, {
+      method: 'POST', headers, body: JSON.stringify(args), signal: AbortSignal.timeout(5000)
+    })
+    if (!response.ok) throw new Error('Supabase request failed')
+    return await response.json() as T
+  } catch {
+    throw createError({ statusCode: 503, statusMessage: 'Publieksvragen zijn even niet bereikbaar. Controleer de Supabase-koppeling.' })
+  }
 }
 
 export async function audienceState(event: H3Event): Promise<{ count: number; next: AudienceQuestion | null }> {
-  const { shared, prefix } = storage(event)
-  if (!shared) return { count: audience.queue.length, next: audience.queue[0] ?? null }
+  const { backend, token, prefix } = storage(event)
+  if (backend === 'supabase') return supabaseRpc(event, 'ayla_audience_state', { p_session: token })
+  if (backend === 'memory') return { count: audience.queue.length, next: audience.queue[0] ?? null }
   return JSON.parse(await redisEval(event, AUDIENCE_STATE_SCRIPT, [`${prefix}:queue`]))
 }
 
 export async function submitAudienceQuestion(event: H3Event, text: string, name: string): Promise<void> {
-  const { shared, prefix } = storage(event)
+  const { backend, token, prefix } = storage(event)
   const client = audienceClient(event)
   let result: string
-  if (shared) {
+  if (backend === 'supabase') {
+    const ip = createHash('sha256').update(clientIp(event)).digest('hex')
+    result = await supabaseRpc(event, 'ayla_audience_submit', {
+      p_session: token, p_client: client, p_ip: ip, p_text: text, p_name: name
+    })
+  } else if (backend === 'redis') {
     const ip = createHash('sha256').update(clientIp(event)).digest('hex')
     result = await redisEval(event, AUDIENCE_SUBMIT_SCRIPT,
       [`${prefix}:queue`, `${prefix}:id`, `${prefix}:client:${client}`, `${prefix}:ip:${ip}`],
@@ -90,9 +113,11 @@ export async function submitAudienceQuestion(event: H3Event, text: string, name:
 }
 
 export async function takeAudienceQuestion(event: H3Event, id: number): Promise<AudienceQuestion> {
-  const { shared, prefix } = storage(event)
+  const { backend, token, prefix } = storage(event)
   let question: AudienceQuestion | null = null
-  if (shared) {
+  if (backend === 'supabase') {
+    question = await supabaseRpc(event, 'ayla_audience_take', { p_session: token, p_id: id })
+  } else if (backend === 'redis') {
     const result = await redisEval(event, AUDIENCE_TAKE_SCRIPT, [`${prefix}:queue`], [String(id)])
     if (result) question = JSON.parse(result)
   } else if (audience.queue[0]?.id === id) {

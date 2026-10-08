@@ -5,7 +5,7 @@ import type { H3Event } from 'h3'
 // Questions from the audience: people scan a QR code, type a question on
 // their phone, and it waits here until the presenter lets Ayla answer it.
 // Local development can use memory; hosted deployments use audience-store's
-// shared Redis backend and a stable token across instances.
+// shared Supabase/Redis backend and a stable token across instances.
 export type AudienceQuestion = { id: number; text: string; name: string }
 
 export const audience = {
@@ -52,12 +52,24 @@ export function isPresenter(event: H3Event): boolean {
 
 // Shared deployments need a stable session across cold starts and instances.
 // A new AUDIENCE_SESSION or demo password starts a fresh presentation.
+export function audienceBackend(event: H3Event): 'supabase' | 'redis' | 'memory' {
+  const config = useRuntimeConfig(event)
+  if (config.supabaseUrl || config.supabaseSecretKey) {
+    if (config.supabaseUrl && config.supabaseSecretKey) return 'supabase'
+    throw createError({ statusCode: 503, statusMessage: 'Stel de Supabase-URL en geheime serverkey in.' })
+  }
+  if (config.audienceRedisUrl || config.audienceRedisToken) {
+    if (config.audienceRedisUrl && config.audienceRedisToken) return 'redis'
+    throw createError({ statusCode: 503, statusMessage: 'Stel de Redis-URL en serverkey in.' })
+  }
+  if (config.audienceHosted) throw createError({ statusCode: 503, statusMessage: 'Publieksvragen zijn nog niet ingesteld. Koppel eerst Supabase.' })
+  return 'memory'
+}
+
 export function audienceToken(event: H3Event): string {
   const config = useRuntimeConfig(event)
-  if (!config.audienceRedisUrl && !config.audienceRedisToken && !config.audienceHosted) return audience.token
-  if (!config.demoPassword || !config.audienceRedisUrl || !config.audienceRedisToken) {
-    throw createError({ statusCode: 503, statusMessage: 'Publieksvragen zijn nog niet ingesteld. Koppel eerst Redis.' })
-  }
+  if (audienceBackend(event) === 'memory') return audience.token
+  if (!config.demoPassword) throw createError({ statusCode: 503, statusMessage: 'Stel eerst het demowachtwoord in.' })
   const environment = process.env.VERCEL_ENV === 'preview'
     ? `preview:${process.env.VERCEL_URL}`
     : process.env.VERCEL_ENV || 'local'

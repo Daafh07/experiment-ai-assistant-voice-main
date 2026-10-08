@@ -15,6 +15,7 @@ function render(query) {
     exports,
     audience: { token: 'current-session' },
     audienceToken: () => 'current-session',
+    audienceBackend: () => 'memory',
     audienceClient: () => 'phone-client',
     useRuntimeConfig: () => ({ audienceRedisUrl: '' }),
     AUDIENCE_LIMITS: { maxLength: 200, maxNameLength: 40 },

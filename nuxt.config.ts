@@ -22,6 +22,8 @@ export default defineNuxtConfig({
     openrouterApiKey: process.env.OPENROUTER_API_KEY,
     // Server-only password for the private demo (username: ayla).
     demoPassword: process.env.DEMO_PASSWORD || '',
+    supabaseUrl: process.env.SUPABASE_URL || '',
+    supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
     audienceRedisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
     audienceRedisToken: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
     audienceSession: process.env.AUDIENCE_SESSION || 'demo',

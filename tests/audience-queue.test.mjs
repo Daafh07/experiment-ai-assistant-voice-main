@@ -21,6 +21,7 @@ function setup() {
   }).outputText, {
     exports: store, require, audience,
     audienceToken: () => 'local-test',
+    audienceBackend: () => 'memory',
     useRuntimeConfig: () => ({ audienceRedisUrl: '' }),
     createError: (details) => Object.assign(new Error(details.statusMessage), details)
   })

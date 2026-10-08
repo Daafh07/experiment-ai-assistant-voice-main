@@ -3,8 +3,8 @@
 export default defineEventHandler((event) => {
   const { k } = getQuery(event)
   const token = audienceToken(event)
-  const retention = useRuntimeConfig(event).audienceRedisUrl
-    ? 'Openstaande vragen worden uiterlijk vier uur na de laatste inzending automatisch verwijderd.'
+  const retention = audienceBackend(event) !== 'memory'
+    ? 'Openstaande vragen verlopen vier uur na de laatste inzending en worden daarna automatisch verwijderd.'
     : 'Vragen worden alleen tijdens deze presentatie bewaard.'
   // The short address opens the current session; old QR links with an
   // explicit token still have to match, so expired links remain invalid.
