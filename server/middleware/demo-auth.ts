@@ -3,6 +3,7 @@ import {
   createError,
   defineEventHandler,
   getRequestHeader,
+  getRequestURL,
   setResponseHeader
 } from 'h3'
 
@@ -23,6 +24,11 @@ export default defineEventHandler((event) => {
   // Authenticated pages and responses must not end up in a shared cache.
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
   setResponseHeader(event, 'Vary', 'Authorization')
+  // Visitors may submit a question, but cannot read the queue or call AI.
+  const path = getRequestURL(event).pathname
+  if ((event.method === 'GET' && path === '/vraag') ||
+      (event.method === 'POST' && path === '/api/audience/ask') ||
+      (event.method === 'GET' && path === '/pave-logo.png')) return
   const authorization = getRequestHeader(event, 'authorization') ?? ''
   const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(authorization)
   let valid = false
@@ -33,7 +39,10 @@ export default defineEventHandler((event) => {
     const expected = createHash('sha256').update(`ayla:${password}`).digest()
     valid = timingSafeEqual(supplied, expected)
   }
-  if (valid) return
+  if (valid) {
+    event.context.demoAuthenticated = true
+    return
+  }
 
   setResponseHeader(event, 'WWW-Authenticate', 'Basic realm="Ayla demo", charset="UTF-8"')
   throw createError({

@@ -22,8 +22,12 @@ export default defineNuxtConfig({
     openrouterApiKey: process.env.OPENROUTER_API_KEY,
     // Server-only password for the private demo (username: ayla).
     demoPassword: process.env.DEMO_PASSWORD || '',
-    // Optional public address for the audience QR code (for example a
-    // tunnel). Without it the QR code uses this laptop's Wi-Fi address.
+    audienceRedisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
+    audienceRedisToken: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
+    audienceSession: process.env.AUDIENCE_SESSION || 'demo',
+    audienceHosted: Boolean(process.env.VERCEL || process.env.NITRO_PRESET?.startsWith('vercel')),
+    // Optional domain/tunnel override. Hosted QR codes use the site origin;
+    // local ones use this laptop's Wi-Fi address.
     publicUrl: process.env.PUBLIC_URL
   }
 })

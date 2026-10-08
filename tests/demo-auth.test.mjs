@@ -38,15 +38,26 @@ function request(path = '/', credentials) {
 }
 const basic = (value) => `Basic ${Buffer.from(value).toString('base64')}`
 
-test('pages, audience form and paid APIs require authentication', async () => {
+test('presenter pages, queue and paid APIs require authentication', async () => {
   const { handle, reached } = app()
-  for (const path of ['/', '/vraag', '/api/chat', '/api/speak', '/api/audience/ask']) {
+  for (const path of ['/', '/api/chat', '/api/speak', '/api/audience/state', '/api/audience/next']) {
     const response = await handle(request(path))
     assert.equal(response.status, 401)
     assert.match(response.headers.get('www-authenticate'), /^Basic realm="Ayla demo"/)
     assert.equal(response.headers.get('cache-control'), 'private, no-store')
   }
   assert.equal(reached(), 0)
+})
+
+test('only the question form, logo and submission endpoint are public', async () => {
+  const { handle, reached } = app()
+  for (const path of ['/vraag', '/pave-logo.png', '/api/audience/ask']) {
+    assert.equal((await handle(request(path))).status, 200)
+  }
+  for (const path of ['/vraag/other', '/api/audience/ask/other', '/api/profiles']) {
+    assert.equal((await handle(request(path))).status, 401)
+  }
+  assert.equal(reached(), 3)
 })
 
 test('incorrect, malformed and oversized credentials never reach the demo', async () => {

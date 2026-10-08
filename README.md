@@ -81,9 +81,11 @@ Open http://localhost:8000.
 
 Stel `DEMO_PASSWORD` in `.env` in op een sterk, uniek wachtwoord. De browser
 toont dan een inlogvenster: gebruik **ayla** als gebruikersnaam en het
-ingestelde wachtwoord. De server controleert dit voor de demo, het
-vragenformulier en alle API-routes, inclusief chat en spraak. Ook mensen
-die de QR-code scannen moeten inloggen.
+ingestelde wachtwoord. De server controleert dit voor de demo, de
+presentatorbediening en de AI-routes, inclusief chat en spraak. Alleen
+`GET /vraag`, het logo en `POST /api/audience/ask` zijn openbaar: bezoekers
+kunnen een vraag insturen zonder jouw demowachtwoord. Zij kunnen de
+wachtrij niet lezen of afhandelen en kunnen geen AI-verzoeken starten.
 
 Op Vercel voeg je `DEMO_PASSWORD` toe als environment variable voor elke
 omgeving waarin je de demo deployt, en deploy je opnieuw. Gebruik online
@@ -92,15 +94,12 @@ de lokale ontwikkelserver mag zonder ingesteld wachtwoord draaien.
 
 De browser onthoudt de login doorgaans tijdens de browsersessie. Gebruik
 een privévenster voor de demo en sluit dat na afloop om de login te wissen.
-Deze beveiliging lost de opslag van publieksvragen op Vercel niet op: die
-staat nog in servergeheugen en vereist daar gedeelde opslag.
+Op Vercel gebruikt de publiekswachtrij gedeelde Redis-opslag.
 
 ## Privédemo deployen op Vercel
 
-Deze configuratie is bedoeld voor een privédemo waarin je zelf met Ayla
-praat of typt. De publiekswachtrij is nog niet geschikt voor Vercel: vragen
-en tokens staan in servergeheugen, en de presentatorroutes accepteren alleen
-`localhost`. Gebruik de QR-functie daarom voorlopig lokaal.
+Deze configuratie ondersteunt de privédemo en publieksvragen via QR-code.
+De presentator logt in; bezoekers openen alleen het openbare vragenformulier.
 
 Koppel de repository aan een Vercel-project (of gebruik de Vercel CLI).
 Kies **Nuxt** als framework, **Node.js 24.x**, `npm run build` als build
@@ -114,6 +113,16 @@ voor zowel Production als Preview als je beide gebruikt:
 | --- | --- |
 | `OPENROUTER_API_KEY` | Je OpenRouter API-key uit je lokale `.env` |
 | `DEMO_PASSWORD` | Je sterke demowachtwoord uit je lokale `.env` |
+| `UPSTASH_REDIS_REST_URL` | REST URL van je gekoppelde Upstash Redis-database |
+| `UPSTASH_REDIS_REST_TOKEN` | REST token met lees- en schrijfrechten voor die database |
+| `AUDIENCE_SESSION` | Een sessienaam, bijvoorbeeld `npuls-demo-1` (standaard: `demo`) |
+
+Maak in Vercel onder **Storage / Marketplace** een Upstash Redis-database
+aan en koppel die aan het project. De integration kan ook variabelen met de
+namen `KV_REST_API_URL` en `KV_REST_API_TOKEN` instellen; die worden eveneens
+ondersteund. Redis-gegevens blijven uitsluitend op de server. De
+publieksfunctie weigert op Vercel toegang als Redis ontbreekt, zodat vragen
+niet ongemerkt in tijdelijke servergeheugens verdwijnen.
 
 Upload of commit `.env` niet. Bij ontbrekend `DEMO_PASSWORD` blijft de
 productiesite gesloten. Log na het deployen in met gebruikersnaam `ayla`.
@@ -123,7 +132,11 @@ draaien. Het Nitro-preset regelt de streaming van de spraakrespons.
 Controleer na de deployment in een privévenster of de login verschijnt en
 of typen, de microfoon en het voorlezen werken. Test de microfoon bij
 voorkeur in Chrome of Edge. Een geslaagde lokale Vercel-build vervangt deze
-controle van de daadwerkelijke deployment niet.
+controle van de daadwerkelijke deployment niet. Test ook de QR-code op een
+telefoon zonder demo-login: stuur een vraag en behandel die met **V**.
+Een eventuele Vercel Authentication-beveiliging voor de hele deployment
+moet bezoekers toegang tot het formulier toestaan; de eigen app-login
+beschermt de demo en de presentatorroutes.
 
 ## Publieksvragen via QR-code of URL
 
@@ -132,12 +145,30 @@ onder de QR-code in de adresbalk van Safari of Chrome typen. Het korte
 adres eindigt op `/vraag` en opent direct het vragenformulier, zonder code
 in de URL.
 
-Standaard gebruikt dit adres het lokale IP-adres van de laptop; telefoons
+Op Vercel gebruikt de QR-code automatisch het domein van de geopende site.
+Met `PUBLIC_URL` kun je een eigen korte domeinnaam instellen. Openstaande
+vragen worden uiterlijk vier uur na de laatste inzending verwijderd; een
+behandelde of overgeslagen vraag wordt direct uit de wachtrij verwijderd.
+De sessiecode blijft gelijk bij een herstart of een nieuwe productiebuild.
+Verander `AUDIENCE_SESSION` en deploy opnieuw om met een lege wachtrij te
+beginnen. Oude sessies verlopen vanzelf. Preview-deployments hebben een
+aparte wachtrij en mengen niet met Production.
+
+Per telefoon kan één vraag per tien seconden worden ingestuurd. De
+wachtrij bevat maximaal vijftig vragen; een aanvullend maximum van zestig
+inzendingen per minuut per IP-adres beperkt misbruik. Alleen insturen
+verbruikt geen AI-tegoed: Ayla antwoordt pas als de presentator **V** drukt.
+
+Lokaal zonder Redis gebruikt het adres het IP-adres van de laptop; telefoons
 moeten dan op hetzelfde wifi-netwerk zitten. Voor een herkenbare korte URL
 stel je `PUBLIC_URL` in `.env` in op een eigen domein of tunnel die naar
 deze app verwijst. Alleen deze instelling maakt een domein nog niet
 bereikbaar: het domein of de tunnel moet ook daadwerkelijk zijn ingericht.
-QR-links met een oude sessiecode vervallen na een herstart.
+Lokaal zonder Redis vervallen QR-links met een oude sessiecode na een herstart.
+
+De Redis-integratietests kunnen zonder cloudaccount worden uitgevoerd met
+`REDIS_SERVER_BIN=/pad/naar/redis-server npm test`; `redis-cli` moet ernaast
+staan. Deze tests gebruiken een geïsoleerde tijdelijke database.
 
 ## How it works (for the class)
 

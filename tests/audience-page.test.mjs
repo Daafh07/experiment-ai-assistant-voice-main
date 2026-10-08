@@ -14,6 +14,9 @@ function render(query) {
   runInNewContext(outputText, {
     exports,
     audience: { token: 'current-session' },
+    audienceToken: () => 'current-session',
+    audienceClient: () => 'phone-client',
+    useRuntimeConfig: () => ({ audienceRedisUrl: '' }),
     AUDIENCE_LIMITS: { maxLength: 200, maxNameLength: 40 },
     defineEventHandler: (handler) => handler,
     getQuery: () => query,

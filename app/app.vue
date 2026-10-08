@@ -513,6 +513,7 @@ function startIntro() {
 type AudienceQuestion = { id: number; text: string; name: string }
 const showQR = ref(false)
 const audienceUrl = ref<string | null>(null)
+const audienceError = ref('')
 const audienceCount = ref(0)
 const audienceNext = ref<AudienceQuestion | null>(null)
 const activeAudience = ref<AudienceQuestion | null>(null)
@@ -527,14 +528,18 @@ async function pollAudience() {
   audiencePolling = true
   try {
     const data = await $fetch<{ url: string | null; count: number; next: AudienceQuestion | null }>(
-      '/api/audience/state'
+      '/api/audience/state', { retry: 0 }
     )
     if (data.next && data.next.id !== audienceNext.value?.id && revealed.value) playBlips(audioCtx, BLIPS.icon)
     audienceUrl.value = data.url
     audienceCount.value = data.count
     audienceNext.value = data.next
-  } catch {
-    // Not the presenter's laptop, or the server is restarting: try again later.
+    audienceError.value = ''
+  } catch (err: any) {
+    audienceUrl.value = null
+    audienceNext.value = null
+    audienceCount.value = 0
+    audienceError.value = err?.data?.statusMessage ?? 'Publieksvragen zijn even niet bereikbaar. Probeer het opnieuw.'
   } finally {
     audiencePolling = false
   }
@@ -649,7 +654,7 @@ function tapOrb() {
       >
         <PixelOrb :state="state" :audio="audio" :icon="orbIcon" />
       </button>
-      <p v-if="errorText" class="error" role="alert">{{ errorText }}</p>
+      <p v-if="errorText || (showQR && audienceError)" class="error" role="alert">{{ errorText || audienceError }}</p>
     </main>
 
     <div v-if="revealed && !outroActive && showQR && audienceUrl" class="qr-overlay">

@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
 
 // Run the actual route with an isolated queue so tests never consume live
 // audience questions or require an OpenRouter request.
@@ -11,6 +14,16 @@ function setup() {
     queue: Array.from({ length: 4 }, (_, i) => ({ id: i + 1, text: `Vraag ${i + 1}`, name: '' }))
   }
   const exports = {}
+  const store = {}
+  const storeSource = readFileSync(new URL('../server/utils/audience-store.ts', import.meta.url), 'utf8')
+  runInNewContext(ts.transpileModule(storeSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText, {
+    exports: store, require, audience,
+    audienceToken: () => 'local-test',
+    useRuntimeConfig: () => ({ audienceRedisUrl: '' }),
+    createError: (details) => Object.assign(new Error(details.statusMessage), details)
+  })
   const source = readFileSync(new URL('../server/api/audience/next.post.ts', import.meta.url), 'utf8')
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS }
@@ -18,6 +31,7 @@ function setup() {
   runInNewContext(outputText, {
     exports,
     audience,
+    takeAudienceQuestion: store.takeAudienceQuestion,
     defineEventHandler: (handler) => handler,
     isPresenter: (event) => event.presenter !== false,
     readBody: async (event) => event.body,

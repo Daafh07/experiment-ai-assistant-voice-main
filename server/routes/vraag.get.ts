@@ -2,9 +2,14 @@
 // question. Plain HTML so it loads instantly on any phone.
 export default defineEventHandler((event) => {
   const { k } = getQuery(event)
+  const token = audienceToken(event)
+  const retention = useRuntimeConfig(event).audienceRedisUrl
+    ? 'Openstaande vragen worden uiterlijk vier uur na de laatste inzending automatisch verwijderd.'
+    : 'Vragen worden alleen tijdens deze presentatie bewaard.'
   // The short address opens the current session; old QR links with an
   // explicit token still have to match, so expired links remain invalid.
-  const valid = k === undefined || k === audience.token
+  const valid = k === undefined || k === token
+  if (valid) audienceClient(event, true)
   setResponseHeader(event, 'Content-Type', 'text/html; charset=utf-8')
   setResponseHeader(event, 'Cache-Control', 'no-store')
 
@@ -90,7 +95,7 @@ export default defineEventHandler((event) => {
     <p>Je vraag staat klaar. Kijk naar het grote scherm.</p>
     <p style="margin-top:18px"><button class="secondary" id="again" type="button" style="width:100%">Nog een vraag stellen</button></p>
   </section>
-  <p class="small">Stuur geen persoonsgegevens mee. Vragen worden alleen tijdens deze presentatie bewaard.</p>
+  <p class="small">Stuur geen persoonsgegevens mee. ${retention}</p>
 <script>
   const form = document.getElementById('form'), text = document.getElementById('text'),
     count = document.getElementById('count'), error = document.getElementById('error'),
@@ -102,7 +107,7 @@ export default defineEventHandler((event) => {
     try {
       const res = await fetch('/api/audience/ask', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ k: ${JSON.stringify(audience.token)}, text: text.value, name: document.getElementById('name').value })
+        body: JSON.stringify({ k: ${JSON.stringify(token)}, text: text.value, name: document.getElementById('name').value })
       });
       if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.statusMessage || 'Versturen lukte niet.'); }
       form.hidden = true; done.hidden = false; text.value = ''; count.textContent = '0';

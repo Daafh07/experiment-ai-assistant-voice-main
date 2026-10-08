@@ -8,10 +8,7 @@ export default defineEventHandler(async (event) => {
   const { action, id } = body
   // Only remove the question the presenter actually saw. A duplicate or
   // delayed request must never consume the following question.
-  if (audience.queue[0]?.id !== id) {
-    throw createError({ statusCode: 409, statusMessage: 'Deze vraag is al behandeld. De wachtrij wordt vernieuwd.' })
-  }
-  const question = audience.queue.shift() ?? null
+  const question = await takeAudienceQuestion(event, id!)
   if (question) console.log(`[ayla] audience question #${question.id} ${action === 'skip' ? 'skipped' : 'answered'}`)
   return { question: action === 'skip' ? null : question }
 })
