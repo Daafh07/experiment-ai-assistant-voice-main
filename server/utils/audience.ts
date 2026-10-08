@@ -55,6 +55,9 @@ export function isPresenter(event: H3Event): boolean {
 export function audienceBackend(event: H3Event): 'supabase' | 'redis' | 'memory' {
   const config = useRuntimeConfig(event)
   if (config.supabaseUrl || config.supabaseSecretKey) {
+    if (config.supabaseSecretKey?.trim().startsWith('sb_publishable_')) {
+      throw createError({ statusCode: 503, statusMessage: 'SUPABASE_SECRET_KEY bevat een publieke key. Gebruik de geheime serverkey (sb_secret_...) uit hetzelfde Supabase-project en deploy opnieuw.' })
+    }
     if (config.supabaseUrl && config.supabaseSecretKey) return 'supabase'
     throw createError({ statusCode: 503, statusMessage: 'Stel de Supabase-URL en geheime serverkey in.' })
   }

@@ -81,8 +81,8 @@ async function supabaseRpc<T>(event: H3Event, name: string, args: Record<string,
     const presenter = event.context?.demoAuthenticated === true
     let message = 'Publieksvragen zijn even niet bereikbaar. Controleer de Supabase-koppeling.'
     if (presenter) {
-      if (status === 401) message = 'Supabase weigert de serverkey. Gebruik SUPABASE_SECRET_KEY uit hetzelfde project als SUPABASE_URL en deploy opnieuw.'
-      else if (status === 403 || code === '42501') message = 'Supabase geeft geen toegang tot de wachtrij. Gebruik een geheime serverkey en voer het wachtrij-SQL-script inclusief rechten uit.'
+      if (status === 403 || code === '42501') message = 'Supabase geeft geen toegang tot de wachtrij. Gebruik een geheime serverkey en voer het wachtrij-SQL-script inclusief rechten uit.'
+      else if (status === 401) message = 'Supabase weigert de serverkey. Gebruik SUPABASE_SECRET_KEY uit hetzelfde project als SUPABASE_URL en deploy opnieuw.'
       else if (code === 'PGRST202' || code === '42P01') message = 'De Supabase-wachtrij ontbreekt of is nog niet zichtbaar voor de API. Voer het wachtrij-SQL-script uit en vernieuw de schema-cache.'
       else if (status === 404 || code === 'PGRST106') message = 'De Supabase Data API is niet bereikbaar op deze project-URL. Controleer SUPABASE_URL en of de Data API met schema public is ingeschakeld.'
       else if (!status) message = 'De Supabase-server is niet bereikbaar of reageert te langzaam. Controleer de project-URL en of het project actief is.'

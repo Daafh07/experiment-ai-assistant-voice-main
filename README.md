@@ -175,6 +175,11 @@ select
 notify pgrst, 'reload schema';
 ```
 
+Een key die begint met `sb_publishable_` is een publieke key en werkt niet
+voor deze serverfuncties, ook niet als je hem `SUPABASE_SECRET_KEY` noemt.
+Gebruik de geheime key (`sb_secret_...`) uit hetzelfde project, vervang de
+waarde in je lokale `.env` en in Vercel en deploy opnieuw.
+
 Een `NULL` betekent dat die functie ontbreekt: voer het eerste migratiescript
 volledig uit. De `NOTIFY` vernieuwt de API-schema-cache. Bij HTTP 401
 controleer je de geheime serverkey en of key en URL uit hetzelfde project

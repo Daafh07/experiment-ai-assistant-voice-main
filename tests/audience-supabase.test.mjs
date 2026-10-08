@@ -134,6 +134,12 @@ test('Supabase queue uses the real PostgreSQL migration and server-only RPCs', a
     })
     await t.test('partial config fails closed and Supabase takes precedence over Redis', async () => {
       await assert.rejects(instance({ ...config, supabaseSecretKey: '' }).audienceState({}), { statusCode: 503 })
+      await assert.rejects(instance({ ...config, supabaseSecretKey: ' sb_publishable_wrong ' }).audienceState({}), error => {
+        assert.equal(error.statusCode, 503)
+        assert.match(error.statusMessage, /publieke key.*sb_secret_/)
+        assert.equal(error.statusMessage.includes('sb_publishable_wrong'), false)
+        return true
+      })
       await assert.rejects(instance({ ...config, supabaseSecretKey: 'sb_secret_wrong' }).audienceState({}), { statusCode: 503 })
       const configured = instance({ ...config, audienceRedisUrl: 'https://unused.example', audienceRedisToken: 'unused' })
       assert.equal(configured.audienceBackend({}), 'supabase')
@@ -143,6 +149,7 @@ test('Supabase queue uses the real PostgreSQL migration and server-only RPCs', a
       try {
         for (const [status, code, expected] of [
           [401, '', /serverkey/],
+          [401, '42501', /geen toegang/],
           [403, '42501', /geen toegang/],
           [404, 'PGRST202', /wachtrij ontbreekt/],
           [404, '', /Data API/],
